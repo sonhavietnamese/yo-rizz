@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.rizz"
+      "bundleIdentifier": "com.anonymous.rizz",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["metamask", "trust", "phantom", "walletconnect"]
+      }
     },
     "android": {
       "adaptiveIcon": {

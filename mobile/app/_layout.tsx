@@ -1,24 +1,27 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter'
-import { useFonts } from 'expo-font'
+import { appKit, wagmiAdapter } from '@/appkit-config'
+import { AppKitProvider } from '@reown/appkit-react-native'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { YieldProvider } from '@yo-protocol/react'
 import { Slot } from 'expo-router'
 import 'react-native-reanimated'
-
-import { PrivyProvider } from '@privy-io/expo'
+import { WagmiProvider } from 'wagmi'
 
 export const unstable_settings = {
   anchor: '(tabs)',
 }
 
-export default function RootLayout() {
-  useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-  })
+const queryClient = new QueryClient()
 
+export default function RootLayout() {
   return (
-    <PrivyProvider appId="cmmq2zkod01r80djovheqamtg" clientId="client-WY6WvVjBm3D74EetctCpcB6k7W99DL6BJmaN6XR9z1VfS">
-      <Slot />
-    </PrivyProvider>
+    <AppKitProvider instance={appKit}>
+      <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+        <QueryClientProvider client={queryClient}>
+          <YieldProvider>
+            <Slot />
+          </YieldProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    </AppKitProvider>
   )
 }
