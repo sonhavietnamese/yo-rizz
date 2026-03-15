@@ -1,19 +1,151 @@
-import { Button, StyleSheet, Text, View } from 'react-native'
+import {
+  baseSepolia,
+  sepolia,
+  useEmbeddedEthereumWallet,
+  useLinkWithOAuth,
+  useLoginWithOAuth,
+  usePrivy,
+} from '@privy-io/expo'
+import { PrivyElements } from '@privy-io/expo/ui'
 import { useVaults } from '@yo-protocol/react'
-import { AppKit, useAppKit, useAccount } from '@reown/appkit-react-native'
-import { useSignMessage } from 'wagmi'
+import { useCallback, useEffect, useState } from 'react'
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
 export default function HomeScreen() {
+  const { isReady, user } = usePrivy()
+  const { login, state: loginState } = useLoginWithOAuth()
+  const { link, state: linkState } = useLinkWithOAuth()
+
+  const [result, setResult] = useState<string | null>(null)
+  const [balance, setBalance] = useState<string>('0')
+
+  const { wallets } = useEmbeddedEthereumWallet()
+  const wallet = wallets?.[0]
+
+  // useEffect(() => {
+  //   const fetchBalance = async () => {
+  //     if (!wallet?.address) return
+
+  //     const provider = await wallet.getProvider?.()
+  //     if (!provider) return
+
+  //     try {
+  //       const balanceHex = await provider.request({
+  //         method: 'eth_getBalance',
+  //         params: [wallet.address, 'latest'],
+  //       })
+  //       const balanceWei = BigInt(balanceHex as string)
+  //       const balanceEth = Number(balanceWei) / 1e18
+  //       setBalance(balanceEth.toFixed(4))
+  //     } catch (error) {
+  //       console.error('Error fetching balance:', error)
+  //     }
+  //   }
+
+  //   fetchBalance()
+  // }, [wallet?.address])
+
+  const handleConnectGoogle = useCallback(async () => {
+    try {
+      if (user) {
+        await link({ provider: 'google' })
+      } else {
+        await login({ provider: 'google' })
+      }
+    } catch (err) {
+      console.error('Google connect error:', err)
+    }
+  }, [user, link, login])
+
+  const signTransaction = async () => {
+    const provider = await wallet?.getProvider?.()
+    if (!provider) return
+
+    try {
+      const signedTx = await provider.request({
+        method: 'eth_signTransaction',
+        params: [
+          {
+            from: wallet.address,
+            to: '0x0000000000000000000000000000000000000000',
+            value: '0x1',
+            gasLimit: '0x5208',
+            chainId: sepolia.id,
+          },
+        ],
+      })
+      setResult(typeof signedTx === 'string' ? signedTx : JSON.stringify(signedTx))
+    } catch (error) {
+      console.error('Sign transaction error:', error)
+      setResult(JSON.stringify(error))
+    }
+  }
+
+  const signAndSendTransaction = async () => {
+    const provider = await wallet?.getProvider?.()
+    if (!provider) return
+
+    try {
+      const response = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: wallet.address,
+            to: '0x0000000000000000000000000000000000000000',
+            value: '0x1',
+            gasLimit: '0x5208',
+            chainId: sepolia.id,
+          },
+        ],
+      })
+      setResult(JSON.stringify(response))
+      console.log('response', response)
+    } catch (error) {
+      console.error('Send transaction error:', error)
+      setResult(JSON.stringify(error))
+    }
+  }
+
+  const isGoogleLoading = loginState.status === 'loading' || linkState.status === 'loading'
+  const hasGoogleLinked = user?.linked_accounts?.some((a) => 'type' in a && a.type === 'google_oauth')
+
+  if (!isReady) return <Text>Loading...</Text>
+
   return (
     <View style={styles.container}>
-      <Text>Hello World</Text>
-      <AppKit />
+      <Text style={styles.title}>Hello World</Text>
+      <PrivyElements />
+
+      <Text>{user?.id}</Text>
+      <Text>{wallet?.address}</Text>
+
+      <TouchableOpacity
+        style={[styles.button, isGoogleLoading && styles.buttonDisabled]}
+        onPress={handleConnectGoogle}
+        disabled={isGoogleLoading}
+      >
+        {isGoogleLoading ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Text style={styles.buttonText}>
+            {user ? (hasGoogleLinked ? 'Google Connected' : 'Connect Google') : 'Sign in with Google'}
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.button, styles.signButton]} onPress={signTransaction} disabled={!user}>
+        <Text style={styles.buttonText}>Sign Transaction</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.button, styles.sendButton]} onPress={signAndSendTransaction} disabled={!user}>
+        <Text style={styles.buttonText}>Send Transaction</Text>
+      </TouchableOpacity>
+
       <VaultInfo />
-      <ConnectButton />
-      <SwapButton />
-      <OnRampButton />
-      <OpenAccountButton />
-      <SignMessageButton />
+
+      <Text>Balance: {balance} ETH</Text>
+
+      {result && <Text>{result}</Text>}
     </View>
   )
 }
@@ -32,83 +164,16 @@ function VaultInfo() {
   )
 }
 
-function SwapButton() {
-  const { open } = useAppKit()
-
-  const handleSwapPress = () => {
-    open({ view: 'Swap' })
-  }
-
-  return <Button title="Swap Tokens" onPress={handleSwapPress} />
-}
-
-function ConnectButton() {
-  const { open, disconnect } = useAppKit()
-  const { address, isConnected, chainId } = useAccount()
-
-  if (isConnected) {
-    return (
-      <View>
-        <Text>Connected to: {chainId}</Text>
-        <Text>Address: {address}</Text>
-        <Button title="Disconnect" onPress={() => disconnect()} />
-      </View>
-    )
-  }
-
-  return <Button title="Connect Wallet" onPress={() => open()} />
-}
-
-function OnRampButton() {
-  const { open } = useAppKit()
-
-  const handleOnRampPress = () => {
-    open({ view: 'OnRamp' })
-  }
-
-  return <Button title="Buy Crypto" onPress={handleOnRampPress} />
-}
-
-function OpenAccountButton() {
-  const { open } = useAppKit()
-
-  const handleOpenAccountPress = () => {
-    open({ view: 'Account' })
-  }
-
-  return <Button title="Open Account" onPress={handleOpenAccountPress} />
-}
-
-function SignMessageButton() {
-  const { isConnected } = useAccount()
-  const { mutate: signMessage, data: signature, error, isPending } = useSignMessage()
-
-  const handleSignPress = () => {
-    signMessage({ message: 'Hello from Yo Rizz! 👋' })
-  }
-
-  if (!isConnected) {
-    return <Button title="Sign Message" disabled />
-  }
-
-  return (
-    <View>
-      <Button
-        title={isPending ? 'Check Wallet...' : 'Sign Message'}
-        onPress={handleSignPress}
-        disabled={isPending}
-      />
-      {signature && <Text style={styles.signature}>Signature: {signature.slice(0, 20)}...</Text>}
-      {error && <Text style={styles.error}>Error: {error.message}</Text>}
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   button: {
     marginTop: 16,
@@ -116,6 +181,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#4285F4',
     borderRadius: 8,
+  },
+  signButton: {
+    backgroundColor: '#34A853',
+  },
+  sendButton: {
+    backgroundColor: '#EA4335',
   },
   buttonDisabled: {
     opacity: 0.6,
